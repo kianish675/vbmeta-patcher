@@ -1,4 +1,4 @@
-name: Patch vbmeta
+name: Patch target vbmeta
 
 on:
   workflow_dispatch:
@@ -7,29 +7,22 @@ permissions:
   contents: write
 
 jobs:
-  run:
+  patch:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Clone avbtool from source
+      - name: Download AVB tool
         run: |
-          sudo apt update
-          sudo apt install -y python3 git
           git clone https://android.googlesource.com/platform/external/avb
 
-      - name: Check files
-        run: |
-          ls -lah
-          test -f vbmeta.img
-
-      - name: Patch the selected vbmeta
+      - name: Patch vbmeta
         run: |
           python3 avb/avbtool.py erase_footer --image vbmeta.img || true
           cp vbmeta.img vbmeta_patched.img
 
-      - name: Upload to releases
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: vbmeta_patched

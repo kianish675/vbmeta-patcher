@@ -23,11 +23,11 @@ jobs:
 
       - name: Verify if vbmeta has been patched successfully
         run: |
-          python3 avb/avbtool.py info_image --image vbmeta_patched.img | tee info.txt
-          if grep -q "Flags: 2" info.txt; then
-            echo "vbmeta successfully patched"
+          python3 avb/avbtool.py info_image --image vbmeta_patched.img | tee vbinfo.txt
+          if grep -q "Flags:[[:space:]]*2" vbinfo.txt; then
+            echo "vbmeta: successfully patched"
           else
-            echo "vbmeta patch failed"
+            echo "vbmeta: patch failed"
             exit 1
           fi
 

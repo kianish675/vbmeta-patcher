@@ -1,0 +1,46 @@
+name: Patch vbmeta
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install avbtool
+        run: |
+          sudo apt update
+          sudo apt install -y python3
+          git clone https://android.googlesource.com/platform/external/avb
+          sudo cp avb/avbtool /usr/local/bin/avbtool
+          sudo chmod +x /usr/local/bin/avbtool
+
+      - name: Check files
+        run: |
+          ls -lah
+          test -f vbmeta.img
+
+      - name: Patch vbmeta
+        run: |
+          avbtool erase_footer --image vbmeta.img || true
+          cp vbmeta.img vbmeta_patched.img
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: vbmeta_patched
+          path: vbmeta_patched.img
+
+      - name: Make a Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: run-${{ github.run_number }}
+          name: patched vbmeta
+          artifacts: vbmeta_patched.img
+          prerelease: true

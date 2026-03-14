@@ -29,11 +29,13 @@ jobs:
       - name: Verify if vbmeta has been patched successfully
         run: |
           python3 avb/avbtool.py info_image --image vbmeta_patched.img | tee vbinfo.txt
-          if grep -q "Flags:[[:space:]]*2" vbinfo.txt; then
-            echo "vbmeta: successfully patched"
+          grep -q "Flags:[[:space:]]*2" vbinfo.txt || { echo "patch failed"; exit 1; }
+          tfingerprint=$(grep "fingerprint" vbinfo.txt | awk -F"'" '{print $2}')
+          if [ "$tfingerprint" ]; then
+            CODENAME=$(echo $tfingerprint | cut -d'/' -f3 | cut -d':' -f1)
+            echo "codename=$CODENAME" >> $GITHUB_ENV
           else
-            echo "vbmeta: patch failed"
-            exit 1
+            echo "codename=unknown" >> $GITHUB_ENV
           fi
 
       - name: Upload to releases
@@ -45,7 +47,7 @@ jobs:
       - name: Create releases
         uses: ncipollo/release-action@v1
         with:
-          tag: run-${{ github.run_number }}
+          tag: run-${{ env.codename }}
           name: patched vbmeta
           artifacts: vbmeta_patched.img
           prerelease: true

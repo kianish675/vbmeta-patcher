@@ -19,8 +19,6 @@ jobs:
 
       - name: Patch Target vbmeta
         run: |
-          mkdir -p extracted
-          python3 avb/avbtool.py extract_vbmeta_image --image vbmeta.img --output extracted/vbmeta_extracted.img
           python3 avb/avbtool.py make_vbmeta_image \
             --flags 2 \
             --include_descriptors_from_image vbmeta.img \

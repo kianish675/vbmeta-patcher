@@ -18,14 +18,13 @@ jobs:
           git clone https://android.googlesource.com/platform/external/avb
 
       - name: Patch Target vbmeta
-        run: python3 avb/avbtool.py make_vbmeta_image --flags 2 --include_descriptors_from_image vbmeta.img --output vbmeta_patched.img
-
+        run: python3 avb/avbtool.py make_vbmeta_image --flags 2 --include_descriptors_from_image target/vbmeta.img --output target/vbmeta_patched.img
 
       - name: Verify if vbmeta has been patched successfully
         run: |
-          python3 avb/avbtool.py info_image --image vbmeta_patched.img | tee vbinfo.txt
-          grep -q "Flags:[[:space:]]*2" vbinfo.txt || { echo "patch failed"; exit 1; }
-          tfingerprint=$(grep "fingerprint" vbinfo.txt | awk -F"'" '{print $2}')
+          python3 avb/avbtool.py info_image --image target/vbmeta_patched.img | tee target/vbinfo.txt
+          grep -q "Flags:[[:space:]]*2" target/vbinfo.txt || { echo "patch failed"; exit 1; }
+          tfingerprint=$(grep "fingerprint" target/vbinfo.txt | awk -F"'" '{print $2}')
           if [ "$tfingerprint" ]; then
             CODENAME=$(echo $tfingerprint | cut -d'/' -f3 | cut -d':' -f1)
             echo "codename=$CODENAME" >> $GITHUB_ENV
@@ -37,12 +36,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: vbmeta_patched
-          path: vbmeta_patched.img
+          path: target/vbmeta_patched.img
 
       - name: Create releases
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ env.codename }}
           name: run-${{ github.run_number }}
-          artifacts: vbmeta_patched.img
+          artifacts: target/vbmeta_patched.img
           prerelease: true

@@ -42,7 +42,7 @@ jobs:
       - name: Create releases
         uses: ncipollo/release-action@v1
         with:
-          tag: run-${{ env.codename }}
-          name: patched vbmeta
+          tag: ${{ env.codename }}
+          name: run-${{ github.run_number }}
           artifacts: vbmeta_patched.img
           prerelease: true

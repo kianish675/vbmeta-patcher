@@ -13,25 +13,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install avbtool
+      - name: Clone avbtool from source
         run: |
           sudo apt update
-          sudo apt install -y python3
+          sudo apt install -y python3 git
           git clone https://android.googlesource.com/platform/external/avb
-          sudo cp avb/avbtool.py /usr/local/bin/avbtool
-          sudo chmod +x /usr/local/bin/avbtool
 
       - name: Check files
         run: |
           ls -lah
           test -f vbmeta.img
 
-      - name: Patch vbmeta
+      - name: Patch the selected vbmeta
         run: |
-          avbtool erase_footer --image vbmeta.img || true
+          python3 avb/avbtool.py erase_footer --image vbmeta.img || true
           cp vbmeta.img vbmeta_patched.img
 
-      - name: Upload
+      - name: Upload to releases
         uses: actions/upload-artifact@v4
         with:
           name: vbmeta_patched

@@ -13,13 +13,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Clone AVB from source
+      - name: Clone AVBtool from source
         run: |
           git clone https://android.googlesource.com/platform/external/avb
 
       - name: Patch Target vbmeta
         run: |
-          python3 avb/avbtool.py make_vbmeta_image --flags 2 --output vbmeta_patched.img
+          python3 avb/avbtool.py make_vbmeta_image \
+          --flags 2 \
+          --include_descriptors_from_image vbmeta.img \
+          --output vbmeta_patched.img
 
       - name: Verify if vbmeta has been patched successfully
         run: |

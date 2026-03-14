@@ -13,22 +13,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download AVB tool
+      - name: Clone AVB from source
         run: |
           git clone https://android.googlesource.com/platform/external/avb
 
-      - name: Patch vbmeta
+      - name: Patch Target vbmeta
         run: |
-          python3 avb/avbtool.py erase_footer --image vbmeta.img || true
-          cp vbmeta.img vbmeta_patched.img
+          python3 avb/avbtool.py make_vbmeta_image --flags 2 --output vbmeta_patched.img
 
-      - name: Upload
+      - name: Verify if vbmeta has been patched successfully
+        run: |
+          python3 avb/avbtool.py info_image --image vbmeta_patched.img | tee info.txt
+          if grep -q "Flags: 2" info.txt; then
+            echo "vbmeta successfully patched"
+          else
+            echo "vbmeta patch failed"
+            exit 1
+          fi
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: vbmeta_patched
           path: vbmeta_patched.img
 
-      - name: Make a Release
+      - name: Create release
         uses: ncipollo/release-action@v1
         with:
           tag: run-${{ github.run_number }}

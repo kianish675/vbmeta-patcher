@@ -35,13 +35,6 @@ jobs:
           grep -q "Flags:[[:space:]]*3" target/${{ github.event.inputs.codename }}/vbinfo.txt || { echo "patch failed"; exit 1; }
           pflag=$(grep "^Flags:" "target/${{ github.event.inputs.codename }}/vbinfo.txt" | awk '{print $2}')
           echo "pflag=$pflag" >> "$GITHUB_ENV"
-          tfingerprint=$(grep "fingerprint" target/${{ github.event.inputs.codename }}/vbinfo.txt | awk -F"'" '{print $2}')
-          if [ "$tfingerprint" ]; then
-            CODENAME=$(echo $tfingerprint | cut -d'/' -f3 | cut -d':' -f1)
-            echo "codename=$CODENAME" >> $GITHUB_ENV
-          else
-            echo "codename=unknown" >> $GITHUB_ENV
-          fi
 
       - name: Upload to releases
         uses: actions/upload-artifact@v4

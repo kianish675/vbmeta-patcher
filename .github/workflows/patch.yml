@@ -40,13 +40,6 @@ jobs:
           pflag=$(grep "^Flags:" "target/${{ github.event.inputs.codename }}/vbinfo.txt" | awk '{print $2}')
           echo "pflag=$pflag" >> "$GITHUB_ENV"
 
-      - name: Tar the patched vbmeta
-        run: |
-          mkdir -p tmp
-          cp "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" tmp/vbmeta.img
-          tar -cf "target/${{ github.event.inputs.codename }}/vbmeta.tar" -C tmp vbmeta.img
-          rm -rf tmp
-
       - name: read firmware information
         run: |
           test -s "target/${{ github.event.inputs.codename }}/.firmware" || { echo ".firmware missing or empty"; exit 1; }
@@ -54,6 +47,13 @@ jobs:
           fp=$(sed -n '2p' "target/${{ github.event.inputs.codename }}/.firmware" | tr -d '\r\n')
           echo "fw=$fw" >> "$GITHUB_ENV"
           echo "fp=$fp" >> "$GITHUB_ENV"
+
+      - name: Tar the patched vbmeta
+        run: |
+          mkdir -p tmp
+          cp "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" tmp/vbmeta.img
+          tar -cf "target/${{ github.event.inputs.codename }}/vbmeta_patched_${{ env.build }}.tar" -C tmp vbmeta.img
+          rm -rf tmp
 
       - name: Upload to releases
         uses: actions/upload-artifact@v4
@@ -72,3 +72,5 @@ jobs:
             Patched vbmeta for device: `${{ github.event.inputs.codename }}`
             **AVB patched Flag:** `${{ env.pflag }}`
             **SHA-256:** `${{ steps.sha256.outputs.sum }}`
+            **Firmware build:** `${{ env.build }}`
+            **Fingerprint:** `${{ env.fingerprint }}`

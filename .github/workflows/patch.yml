@@ -2,15 +2,8 @@ name: Patch target vbmeta
 
 on:
   workflow_dispatch:
-    inputs:
-      codename:
-        description: Choose device
-        required: true
-        type: choice
-        options:
-          - e1s
-          - a26x
-          - a35x
+  schedule:
+    - cron: '0 3 * * *'
 
 permissions:
   contents: write
@@ -18,6 +11,9 @@ permissions:
 jobs:
   patch:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        codename: [e1s, a26x, a35x]
 
     steps:
       - uses: actions/checkout@v4
@@ -28,55 +24,56 @@ jobs:
 
       - name: Patch Target vbmeta
         run: |
-          cp "target/${{ github.event.inputs.codename }}/vbmeta.img" "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" && printf "$(printf '\\x%02X' 3)" | dd of="target/${{ github.event.inputs.codename }}/vbmeta_patched.img" bs=1 seek=123 count=1 conv=notrunc &> /dev/null
-          sha256sum "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" | tee "target/${{ github.event.inputs.codename }}/vbmeta_patched.img.sha256"
-          shasum=$(awk '{print $1}' "target/${{ github.event.inputs.codename }}/vbmeta_patched.img.sha256")
+          cp "target/${{ matrix.codename }}/vbmeta.img" "target/${{ matrix.codename }}/vbmeta_patched.img"
+          printf "$(printf '\\x%02X' 3)" | dd of="target/${{ matrix.codename }}/vbmeta_patched.img" bs=1 seek=123 count=1 conv=notrunc &> /dev/null
+          sha256sum "target/${{ matrix.codename }}/vbmeta_patched.img" | tee "target/${{ matrix.codename }}/vbmeta_patched.img.sha256"
+          shasum=$(awk '{print $1}' "target/${{ matrix.codename }}/vbmeta_patched.img.sha256")
           echo "shasum=$shasum" >> "$GITHUB_ENV"
 
       - name: Verify if vbmeta has been patched successfully
         run: |
-          python3 avb/avbtool.py info_image --image "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" | tee "target/${{ github.event.inputs.codename }}/vbinfo.txt"
-          grep -q "Flags:[[:space:]]*3" "target/${{ github.event.inputs.codename }}/vbinfo.txt" || { echo "patch failed"; exit 1; }
-          pflag=$(grep "^Flags:" "target/${{ github.event.inputs.codename }}/vbinfo.txt" | awk '{print $2}')
+          python3 avb/avbtool.py info_image --image "target/${{ matrix.codename }}/vbmeta_patched.img" | tee "target/${{ matrix.codename }}/vbinfo.txt"
+          grep -q "Flags:[[:space:]]*3" "target/${{ matrix.codename }}/vbinfo.txt" || { echo "patch failed"; exit 1; }
+          pflag=$(grep "^Flags:" "target/${{ matrix.codename }}/vbinfo.txt" | awk '{print $2}')
           echo "pflag=$pflag" >> "$GITHUB_ENV"
 
       - name: Read firmware information
         run: |
-          test -s "target/${{ github.event.inputs.codename }}/.firmware" || { echo ".firmware missing or empty"; exit 1; }
-          fw=$(sed -n '1p' "target/${{ github.event.inputs.codename }}/.firmware" | tr -d '\r\n')
-          fp=$(sed -n '2p' "target/${{ github.event.inputs.codename }}/.firmware" | tr -d '\r\n')
+          test -s "target/${{ matrix.codename }}/.firmware" || { echo ".firmware missing or empty"; exit 1; }
+          fw=$(sed -n '1p' "target/${{ matrix.codename }}/.firmware" | tr -d '\r\n')
+          fp=$(sed -n '2p' "target/${{ matrix.codename }}/.firmware" | tr -d '\r\n')
           echo "fw=$fw" >> "$GITHUB_ENV"
           echo "fp=$fp" >> "$GITHUB_ENV"
 
       - name: Tar the patched vbmeta
         run: |
-           rm -rf tmp
-           mkdir -p tmp
-           cp "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" "tmp/vbmeta.img"
-           tar -cf "target/${{ github.event.inputs.codename }}/vbmeta_patched_${{ env.fw }}.tar" -C tmp vbmeta.img
-           test -f "target/${{ github.event.inputs.codename }}/vbmeta_patched_${{ env.fw }}.tar" || { echo "vbmeta-patcher: tar was not created"; exit 1; }
-           tar -tf "target/${{ github.event.inputs.codename }}/vbmeta_patched_${{ env.fw }}.tar"
-           rm -rf tmp
+          rm -rf tmp
+          mkdir -p tmp
+          cp "target/${{ matrix.codename }}/vbmeta_patched.img" "tmp/vbmeta.img"
+          tar -cf "target/${{ matrix.codename }}/vbmeta_patched_${{ env.fw }}.tar" -C tmp vbmeta.img
+          test -f "target/${{ matrix.codename }}/vbmeta_patched_${{ env.fw }}.tar" || { echo "vbmeta-patcher: tar was not created"; exit 1; }
+          tar -tf "target/${{ matrix.codename }}/vbmeta_patched_${{ env.fw }}.tar"
+          rm -rf tmp
 
       - name: Upload to releases
         uses: actions/upload-artifact@v4
         with:
-          name: vbmeta_patched_${{ github.event.inputs.codename }}
+          name: vbmeta_patched_${{ matrix.codename }}
           path: |
-           target/${{ github.event.inputs.codename }}/vbmeta_patched.img
-           target/${{ github.event.inputs.codename }}/vbmeta_patched_${{ env.fw }}.tar
+            target/${{ matrix.codename }}/vbmeta_patched.img
+            target/${{ matrix.codename }}/vbmeta_patched_${{ env.fw }}.tar
 
       - name: Create releases
         uses: ncipollo/release-action@v1
         with:
-          tag: release-${{ github.run_number }}
-          name: ${{ github.event.inputs.codename }}-${{ github.run_number }}
+          tag: release-${{ github.run_number }}-${{ matrix.codename }}
+          name: ${{ matrix.codename }}-${{ github.run_number }}
           artifacts: |
-           target/${{ github.event.inputs.codename }}/vbmeta_patched.img
-           target/${{ github.event.inputs.codename }}/vbmeta_patched_${{ env.fw }}.tar
+            target/${{ matrix.codename }}/vbmeta_patched.img
+            target/${{ matrix.codename }}/vbmeta_patched_${{ env.fw }}.tar
           prerelease: false
           body: |
-            Patched vbmeta for device: `${{ github.event.inputs.codename }}`
+            Patched vbmeta for device: `${{ matrix.codename }}`
             **AVB patched Flag:** `${{ env.pflag }}`
             **SHA-256:** `${{ env.shasum }}`
             **Build:** `${{ env.fw }}`

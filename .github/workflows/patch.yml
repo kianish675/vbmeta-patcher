@@ -27,7 +27,11 @@ jobs:
           git clone https://android.googlesource.com/platform/external/avb
 
       - name: Patch Target vbmeta
-        run: cp "target/${{ github.event.inputs.codename }}/vbmeta.img" "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" && printf "$(printf '\\x%02X' 3)" | dd of="target/${{ github.event.inputs.codename }}/vbmeta_patched.img" bs=1 seek=123 count=1 conv=notrunc &> /dev/null
+        run:  |
+          cp "target/${{ github.event.inputs.codename }}/vbmeta.img" "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" && printf "$(printf '\\x%02X' 3)" | dd of="target/${{ github.event.inputs.codename }}/vbmeta_patched.img" bs=1 seek=123 count=1 conv=notrunc &> /dev/null
+              sha256sum "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" | tee "target/${{ github.event.inputs.codename }}/vbmeta_patched.img.sha256"
+              shasum=$(awk '{print $1}' "target/${{ github.event.inputs.codename }}/vbmeta_patched.img.sha256")
+              echo "shasum=$shasum" >> "$GITHUB_ENV"
 
       - name: Verify if vbmeta has been patched successfully
         run: |
@@ -52,3 +56,4 @@ jobs:
           body: |
             Patched vbmeta for device: `${{ github.event.inputs.codename }}`
             **AVB patched Flag:** `${{ env.pflag }}`
+            **SHA-256:** `${{ steps.sha256.outputs.sum }}`

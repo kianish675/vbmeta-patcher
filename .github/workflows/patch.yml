@@ -51,6 +51,6 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: release-${{ github.run_number }}
-          name: run-${{ github.run_number }}
+          name: ${{ github.event.inputs.codename }}-${{ github.run_number }}
           artifacts: target/${{ github.event.inputs.codename }}/vbmeta_patched.img
           prerelease: false

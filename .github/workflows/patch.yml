@@ -59,7 +59,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: vbmeta_patched_${{ github.event.inputs.codename }}
-          path: target/${{ github.event.inputs.codename }}/vbmeta_patched.img
+          path: |
+           target/${{ github.event.inputs.codename }}/vbmeta_patched.img
+           target/${{ github.event.inputs.codename }}/vbmeta_patched_${{ env.fw }}.tar
 
       - name: Create releases
         uses: ncipollo/release-action@v1

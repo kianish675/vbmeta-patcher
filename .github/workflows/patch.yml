@@ -33,6 +33,8 @@ jobs:
         run: |
           python3 avb/avbtool.py info_image --image target/${{ github.event.inputs.codename }}/vbmeta_patched.img | tee target/${{ github.event.inputs.codename }}/vbinfo.txt
           grep -q "Flags:[[:space:]]*2" target/${{ github.event.inputs.codename }}/vbinfo.txt || { echo "patch failed"; exit 1; }
+          pflag=$(grep "^Flags:" "target/${{ github.event.inputs.codename }}/vbinfo.txt" | awk '{print $2}')
+          echo "pflag=$pflag" >> "$GITHUB_ENV"
           tfingerprint=$(grep "fingerprint" target/${{ github.event.inputs.codename }}/vbinfo.txt | awk -F"'" '{print $2}')
           if [ "$tfingerprint" ]; then
             CODENAME=$(echo $tfingerprint | cut -d'/' -f3 | cut -d':' -f1)
@@ -54,3 +56,7 @@ jobs:
           name: ${{ github.event.inputs.codename }}-${{ github.run_number }}
           artifacts: target/${{ github.event.inputs.codename }}/vbmeta_patched.img
           prerelease: false
+          body: |
+            Patched vbmeta for device: `${{ github.event.inputs.codename }}`
+            **Device Fingerprint:** `${{ env.target_fingerprint }}`
+            **AVB patched Flag:** `${{ env.pflag }}`

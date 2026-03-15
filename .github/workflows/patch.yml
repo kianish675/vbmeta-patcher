@@ -28,11 +28,11 @@ jobs:
 
       - name: Patch Target vbmeta
         run: cp "target/${{ github.event.inputs.codename }}/vbmeta.img" "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" && printf "$(printf '\\x%02X' 3)" | dd of="target/${{ github.event.inputs.codename }}/vbmeta_patched.img" bs=1 seek=123 count=1 conv=notrunc &> /dev/null
-        
+
       - name: Verify if vbmeta has been patched successfully
         run: |
           python3 avb/avbtool.py info_image --image target/${{ github.event.inputs.codename }}/vbmeta_patched.img | tee target/${{ github.event.inputs.codename }}/vbinfo.txt
-          grep -q "Flags:[[:space:]]*2" target/${{ github.event.inputs.codename }}/vbinfo.txt || { echo "patch failed"; exit 1; }
+          grep -q "Flags:[[:space:]]*3" target/${{ github.event.inputs.codename }}/vbinfo.txt || { echo "patch failed"; exit 1; }
           pflag=$(grep "^Flags:" "target/${{ github.event.inputs.codename }}/vbinfo.txt" | awk '{print $2}')
           echo "pflag=$pflag" >> "$GITHUB_ENV"
           tfingerprint=$(grep "fingerprint" target/${{ github.event.inputs.codename }}/vbinfo.txt | awk -F"'" '{print $2}')

@@ -9,7 +9,7 @@ on:
         type: choice
         options:
           - e1s
-          - a26x  
+          - a26x
           - a35x
 
 permissions:
@@ -27,16 +27,16 @@ jobs:
           git clone https://android.googlesource.com/platform/external/avb
 
       - name: Patch Target vbmeta
-        run:  |
+        run: |
           cp "target/${{ github.event.inputs.codename }}/vbmeta.img" "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" && printf "$(printf '\\x%02X' 3)" | dd of="target/${{ github.event.inputs.codename }}/vbmeta_patched.img" bs=1 seek=123 count=1 conv=notrunc &> /dev/null
-              sha256sum "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" | tee "target/${{ github.event.inputs.codename }}/vbmeta_patched.img.sha256"
-              shasum=$(awk '{print $1}' "target/${{ github.event.inputs.codename }}/vbmeta_patched.img.sha256")
-              echo "shasum=$shasum" >> "$GITHUB_ENV"
+          sha256sum "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" | tee "target/${{ github.event.inputs.codename }}/vbmeta_patched.img.sha256"
+          shasum=$(awk '{print $1}' "target/${{ github.event.inputs.codename }}/vbmeta_patched.img.sha256")
+          echo "shasum=$shasum" >> "$GITHUB_ENV"
 
       - name: Verify if vbmeta has been patched successfully
         run: |
-          python3 avb/avbtool.py info_image --image target/${{ github.event.inputs.codename }}/vbmeta_patched.img | tee target/${{ github.event.inputs.codename }}/vbinfo.txt
-          grep -q "Flags:[[:space:]]*3" target/${{ github.event.inputs.codename }}/vbinfo.txt || { echo "patch failed"; exit 1; }
+          python3 avb/avbtool.py info_image --image "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" | tee "target/${{ github.event.inputs.codename }}/vbinfo.txt"
+          grep -q "Flags:[[:space:]]*3" "target/${{ github.event.inputs.codename }}/vbinfo.txt" || { echo "patch failed"; exit 1; }
           pflag=$(grep "^Flags:" "target/${{ github.event.inputs.codename }}/vbinfo.txt" | awk '{print $2}')
           echo "pflag=$pflag" >> "$GITHUB_ENV"
 
@@ -46,6 +46,14 @@ jobs:
           cp "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" tmp/vbmeta.img
           tar -cf "target/${{ github.event.inputs.codename }}/vbmeta.tar" -C tmp vbmeta.img
           rm -rf tmp
+
+      - name: read firmware information
+        run: |
+          test -s "target/${{ github.event.inputs.codename }}/.firmware" || { echo ".firmware missing or empty"; exit 1; }
+          fw=$(sed -n '1p' "target/${{ github.event.inputs.codename }}/.firmware" | tr -d '\r\n')
+          fp=$(sed -n '2p' "target/${{ github.event.inputs.codename }}/.firmware" | tr -d '\r\n')
+          echo "fw=$fw" >> "$GITHUB_ENV"
+          echo "fp=$fp" >> "$GITHUB_ENV"
 
       - name: Upload to releases
         uses: actions/upload-artifact@v4

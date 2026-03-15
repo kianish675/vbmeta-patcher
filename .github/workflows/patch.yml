@@ -9,7 +9,7 @@ on:
         type: choice
         options:
           - e1s
-          - a26x  
+          - a26x
           - a35x
 
 permissions:
@@ -27,20 +27,20 @@ jobs:
           git clone https://android.googlesource.com/platform/external/avb
 
       - name: Patch Target vbmeta
-        run: python3 avb/avbtool.py make_vbmeta_image --flags 2 --include_descriptors_from_image "target/${{ github.event.inputs.codename }}/vbmeta.img" --output "target/${{ github.event.inputs.codename }}/vbmeta_patched.img"
+        run: cp "target/${{ github.event.inputs.codename }}/vbmeta.img" "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" && printf "$(printf '\\x%02X' 3)" | dd of="target/${{ github.event.inputs.codename }}/vbmeta_patched.img" bs=1 seek=123 count=1 conv=notrunc &> /dev/null
 
       - name: Verify if vbmeta has been patched successfully
         run: |
-          python3 avb/avbtool.py info_image --image target/${{ github.event.inputs.codename }}/vbmeta_patched.img | tee target/${{ github.event.inputs.codename }}/vbinfo.txt
-          grep -q "Flags:[[:space:]]*2" target/${{ github.event.inputs.codename }}/vbinfo.txt || { echo "patch failed"; exit 1; }
+          python3 avb/avbtool.py info_image --image "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" | tee "target/${{ github.event.inputs.codename }}/vbinfo.txt"
+          grep -q "Flags:[[:space:]]*3" "target/${{ github.event.inputs.codename }}/vbinfo.txt" || { echo "patch failed"; exit 1; }
           pflag=$(grep "^Flags:" "target/${{ github.event.inputs.codename }}/vbinfo.txt" | awk '{print $2}')
           echo "pflag=$pflag" >> "$GITHUB_ENV"
-          tfingerprint=$(grep "fingerprint" target/${{ github.event.inputs.codename }}/vbinfo.txt | awk -F"'" '{print $2}')
-          if [ "$tfingerprint" ]; then
-            CODENAME=$(echo $tfingerprint | cut -d'/' -f3 | cut -d':' -f1)
-            echo "codename=$CODENAME" >> $GITHUB_ENV
+          tfingerprint=$(grep "fingerprint" "target/${{ github.event.inputs.codename }}/vbinfo.txt" | awk -F"'" '{print $2}')
+          if [ -n "$tfingerprint" ]; then
+            CODENAME=$(echo "$tfingerprint" | cut -d'/' -f3 | cut -d':' -f1)
+            echo "codename=$CODENAME" >> "$GITHUB_ENV"
           else
-            echo "codename=unknown" >> $GITHUB_ENV
+            echo "codename=unknown" >> "$GITHUB_ENV"
           fi
 
       - name: Upload to releases
@@ -53,9 +53,10 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: release-${{ github.run_number }}
-          name: ${{ github.event.inputs.codename }}-${{ github.run_number }}
+          name: ${{ github.event.inputs.codename }}-flag${{ env.pflag }}-${{ github.run_number }}
           artifacts: target/${{ github.event.inputs.codename }}/vbmeta_patched.img
           prerelease: false
           body: |
             Patched vbmeta for device: `${{ github.event.inputs.codename }}`
+
             **AVB patched Flag:** `${{ env.pflag }}`

@@ -50,7 +50,7 @@ jobs:
       - name: Create releases
         uses: ncipollo/release-action@v1
         with:
-          tag: ${{ env.codename }}
+          tag: ${{ env.codename }}-${{ github.run_number }}
           name: run-${{ github.run_number }}
           artifacts: target/${{ github.event.inputs.codename }}/vbmeta_patched.img
           prerelease: true

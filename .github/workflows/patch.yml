@@ -40,7 +40,7 @@ jobs:
           pflag=$(grep "^Flags:" "target/${{ github.event.inputs.codename }}/vbinfo.txt" | awk '{print $2}')
           echo "pflag=$pflag" >> "$GITHUB_ENV"
 
-      - name: read firmware information
+      - name: Read firmware information
         run: |
           test -s "target/${{ github.event.inputs.codename }}/.firmware" || { echo ".firmware missing or empty"; exit 1; }
           fw=$(sed -n '1p' "target/${{ github.event.inputs.codename }}/.firmware" | tr -d '\r\n')
@@ -50,10 +50,13 @@ jobs:
 
       - name: Tar the patched vbmeta
         run: |
-          mkdir -p tmp
-          cp "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" tmp/vbmeta.img
-          tar -cf "target/${{ github.event.inputs.codename }}/vbmeta_patched_${{ env.build }}.tar" -C tmp vbmeta.img
-          rm -rf tmp
+           rm -rf tmp
+           mkdir -p tmp
+           cp "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" "tmp/vbmeta.img"
+           tar -cf "target/${{ github.event.inputs.codename }}/vbmeta_patched_${{ env.fw }}.tar" -C tmp vbmeta.img
+           test -f "target/${{ github.event.inputs.codename }}/vbmeta_patched_${{ env.fw }}.tar" || { echo "vbmeta-patcher: tar was not created"; exit 1; }
+           tar -tf "target/${{ github.event.inputs.codename }}/vbmeta_patched_${{ env.fw }}.tar"
+           rm -rf tmp
 
       - name: Upload to releases
         uses: actions/upload-artifact@v4
@@ -68,7 +71,9 @@ jobs:
         with:
           tag: release-${{ github.run_number }}
           name: ${{ github.event.inputs.codename }}-${{ github.run_number }}
-          artifacts: target/${{ github.event.inputs.codename }}/vbmeta_patched.img
+          artifacts: |
+           target/${{ github.event.inputs.codename }}/vbmeta_patched.img
+           target/${{ github.event.inputs.codename }}/vbmeta_patched_${{ env.fw }}.tar
           prerelease: false
           body: |
             Patched vbmeta for device: `${{ github.event.inputs.codename }}`

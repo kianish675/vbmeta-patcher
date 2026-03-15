@@ -58,5 +58,4 @@ jobs:
           prerelease: false
           body: |
             Patched vbmeta for device: `${{ github.event.inputs.codename }}`
-            **Device Fingerprint:** `${{ env.target_fingerprint }}`
             **AVB patched Flag:** `${{ env.pflag }}`

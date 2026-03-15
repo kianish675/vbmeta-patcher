@@ -40,6 +40,13 @@ jobs:
           pflag=$(grep "^Flags:" "target/${{ github.event.inputs.codename }}/vbinfo.txt" | awk '{print $2}')
           echo "pflag=$pflag" >> "$GITHUB_ENV"
 
+      - name: Tar the patched vbmeta
+        run: |
+          mkdir -p tmp
+          cp "target/${{ github.event.inputs.codename }}/vbmeta_patched.img" tmp/vbmeta.img
+          tar -cf "target/${{ github.event.inputs.codename }}/vbmeta.tar" -C tmp vbmeta.img
+          rm -rf tmp
+
       - name: Upload to releases
         uses: actions/upload-artifact@v4
         with:

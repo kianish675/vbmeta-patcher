@@ -11,6 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     strategy:
       fail-fast: false
       matrix:
@@ -33,97 +34,95 @@ jobs:
             imei: "355088506557251"
             codename: "a35x"
 
-  steps:
-    - name: Checkout repo
-      uses: actions/checkout@v4
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-    - name: Check latest firmware
-      run: |
-        latest=$(curl -s "http://fota-cloud-dn.ospserver.net/firmware/${{ matrix.csc }}/${{ matrix.model }}/version.xml" \
-        | grep latest | sed 's/^[^>]*>//' | sed 's/<.*//')
+      - name: Check latest firmware
+        run: |
+          latest=$(curl -s "http://fota-cloud-dn.ospserver.net/firmware/${{ matrix.csc }}/${{ matrix.model }}/version.xml" \
+          | grep latest | sed 's/^[^>]*>//' | sed 's/<.*//')
 
-        echo "latest=$latest" >> $GITHUB_ENV
+          echo "latest=$latest" >> $GITHUB_ENV
 
-        if [ -f "current_${{ matrix.model }}_${{ matrix.csc }}" ]; then
-          current=$(cat current_${{ matrix.model }}_${{ matrix.csc }})
-        else
-          current=""
-        fi
+          if [ -f "current_${{ matrix.model }}_${{ matrix.csc }}" ]; then
+            current=$(cat current_${{ matrix.model }}_${{ matrix.csc }})
+          else
+            current=""
+          fi
 
-        if [ "$latest" != "$current" ]; then
-          echo "need_update=1" >> $GITHUB_ENV
-        else
-          echo "need_update=0" >> $GITHUB_ENV
-        fi
+          if [ "$latest" != "$current" ]; then
+            echo "need_update=1" >> $GITHUB_ENV
+          else
+            echo "need_update=0" >> $GITHUB_ENV
+          fi
 
-    - name: Install dependencies
-      if: env.need_update == '1'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y lz4 unzip python3 python3-venv git curl
+      - name: Install dependencies
+        if: env.need_update == '1'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lz4 unzip python3 python3-venv git curl
 
-    - name: Install samloader
-      if: env.need_update == '1'
-      run: |
-        python3 -m venv venv
-        source venv/bin/activate
-        pip install git+https://github.com/ananjaser1211/samloader.git
+      - name: Install samloader
+        if: env.need_update == '1'
+        run: |
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install git+https://github.com/ananjaser1211/samloader.git
 
-    - name: Download firmware
-      if: env.need_update == '1'
-      run: |
-        source venv/bin/activate
-        mkdir fw
+      - name: Download firmware
+        if: env.need_update == '1'
+        run: |
+          source venv/bin/activate
+          mkdir fw
 
-        samloader -m ${{ matrix.model }} -r ${{ matrix.csc }} -i ${{ matrix.imei }} download -O fw
+          samloader -m ${{ matrix.model }} -r ${{ matrix.csc }} -i ${{ matrix.imei }} download -O fw
 
-        unzip fw/*.zip -d fw
-        rm fw/*.zip
+          unzip fw/*.zip -d fw
+          rm fw/*.zip
 
-    - name: Extract vbmeta
-      if: env.need_update == '1'
-      run: |
-        tar xvf fw/BL*.tar.md5 vbmeta.img.lz4
-        lz4 -d vbmeta.img.lz4 vbmeta.img
+      - name: Extract vbmeta
+        if: env.need_update == '1'
+        run: |
+          tar xvf fw/BL*.tar.md5 vbmeta.img.lz4
+          lz4 -d vbmeta.img.lz4 vbmeta.img
 
-    - name: Patch vbmeta
-      if: env.need_update == '1'
-      run: |
-        cp vbmeta.img vbmeta_patched.img
+      - name: Patch vbmeta
+        if: env.need_update == '1'
+        run: |
+          cp vbmeta.img vbmeta_patched.img
+          printf '\x03' | dd of=vbmeta_patched.img bs=1 seek=123 count=1 conv=notrunc
 
-        printf '\x03' | dd of=vbmeta_patched.img bs=1 seek=123 count=1 conv=notrunc
+      - name: Create release package
+        if: env.need_update == '1'
+        run: |
+          mkdir out
+          cp vbmeta.img out/
+          cp vbmeta_patched.img out/
+          tar -cf "${{ matrix.codename }}_vbmeta_${latest}.tar" -C out .
 
-    - name: Create release package
-      if: env.need_update == '1'
-      run: |
-        mkdir out
-        cp vbmeta_patched.img out/
-        cp vbmeta.img out/
+      - name: Save version
+        if: env.need_update == '1'
+        run: |
+          echo $latest > current_${{ matrix.model }}_${{ matrix.csc }}
 
-        tar -cf "${{ matrix.codename }}_vbmeta_${latest}.tar" -C out .
+      - name: Commit version file
+        if: env.need_update == '1'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
 
-    - name: Save version
-      if: env.need_update == '1'
-      run: |
-        echo $latest > current_${{ matrix.model }}_${{ matrix.csc }}
+          git add current_${{ matrix.model }}_${{ matrix.csc }}
+          git commit -m "Update firmware ${{ matrix.model }} $latest" || true
+          git push
 
-    - name: Commit version file
-      if: env.need_update == '1'
-      run: |
-        git config user.name "github-actions"
-        git config user.email "github-actions@github.com"
-
-        git add current_${{ matrix.model }}_${{ matrix.csc }}
-        git commit -m "Update firmware ${{ matrix.model }} $latest" || true
-        git push
-
-    - name: Create release
-      if: env.need_update == '1'
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: "${{ matrix.codename }}-${{ env.latest }}"
-        name: "${{ matrix.model }} ${env.latest}"
-        files: |
-          ${{ matrix.codename }}_vbmeta_${{ env.latest }}.tar
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create release
+        if: env.need_update == '1'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "${{ matrix.codename }}-${{ env.latest }}"
+          name: "${{ matrix.model }} ${{ env.latest }}"
+          files: |
+            ${{ matrix.codename }}_vbmeta_${{ env.latest }}.tar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

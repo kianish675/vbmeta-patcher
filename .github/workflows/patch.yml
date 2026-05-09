@@ -1,80 +1,129 @@
-name: Patch target vbmeta
+name: Patch vbmeta
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *'
+    - cron: "0 12 * * *"
 
 permissions:
   contents: write
 
 jobs:
-  patch:
+  build:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        codename: [e1s, a26x, a35x]
+        include:
+          - model: "SM-S921B"
+            csc: "EUX"
+            omc: "OXM"
+            imei: "350070120202022"
+            codename: "e1s"
 
-    steps:
-      - uses: actions/checkout@v4
+          - model: "SM-A266B"
+            csc: "EUX"
+            omc: "OXM"
+            imei: "350439761193107"
+            codename: "a26x"
 
-      - name: Clone AVBtool from source
-        run: |
-          git clone https://android.googlesource.com/platform/external/avb
+          - model: "SM-A356B"
+            csc: "EUX"
+            omc: "OXM"
+            imei: "355088506557251"
+            codename: "a35x"
 
-      - name: Patch Target vbmeta
-        run: |
-          cp "target/${{ matrix.codename }}/vbmeta.img" "target/${{ matrix.codename }}/vbmeta_patched.img"
-          printf "$(printf '\\x%02X' 3)" | dd of="target/${{ matrix.codename }}/vbmeta_patched.img" bs=1 seek=123 count=1 conv=notrunc &> /dev/null
-          sha256sum "target/${{ matrix.codename }}/vbmeta_patched.img" | tee "target/${{ matrix.codename }}/vbmeta_patched.img.sha256"
-          shasum=$(awk '{print $1}' "target/${{ matrix.codename }}/vbmeta_patched.img.sha256")
-          echo "shasum=$shasum" >> "$GITHUB_ENV"
+  steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
 
-      - name: Verify if vbmeta has been patched successfully
-        run: |
-          python3 avb/avbtool.py info_image --image "target/${{ matrix.codename }}/vbmeta_patched.img" | tee "target/${{ matrix.codename }}/vbinfo.txt"
-          grep -q "Flags:[[:space:]]*3" "target/${{ matrix.codename }}/vbinfo.txt" || { echo "patch failed"; exit 1; }
-          pflag=$(grep "^Flags:" "target/${{ matrix.codename }}/vbinfo.txt" | awk '{print $2}')
-          echo "pflag=$pflag" >> "$GITHUB_ENV"
+    - name: Check latest firmware
+      run: |
+        latest=$(curl -s "http://fota-cloud-dn.ospserver.net/firmware/${{ matrix.csc }}/${{ matrix.model }}/version.xml" \
+        | grep latest | sed 's/^[^>]*>//' | sed 's/<.*//')
 
-      - name: Read firmware information
-        run: |
-          test -s "target/${{ matrix.codename }}/.firmware" || { echo ".firmware missing or empty"; exit 1; }
-          fw=$(sed -n '1p' "target/${{ matrix.codename }}/.firmware" | tr -d '\r\n')
-          fp=$(sed -n '2p' "target/${{ matrix.codename }}/.firmware" | tr -d '\r\n')
-          echo "fw=$fw" >> "$GITHUB_ENV"
-          echo "fp=$fp" >> "$GITHUB_ENV"
+        echo "latest=$latest" >> $GITHUB_ENV
 
-      - name: Tar the patched vbmeta
-        run: |
-          rm -rf tmp
-          mkdir -p tmp
-          cp "target/${{ matrix.codename }}/vbmeta_patched.img" "tmp/vbmeta.img"
-          tar -cf "target/${{ matrix.codename }}/vbmeta_patched_${{ env.fw }}.tar" -C tmp vbmeta.img
-          test -f "target/${{ matrix.codename }}/vbmeta_patched_${{ env.fw }}.tar" || { echo "vbmeta-patcher: tar was not created"; exit 1; }
-          tar -tf "target/${{ matrix.codename }}/vbmeta_patched_${{ env.fw }}.tar"
-          rm -rf tmp
+        if [ -f "current_${{ matrix.model }}_${{ matrix.csc }}" ]; then
+          current=$(cat current_${{ matrix.model }}_${{ matrix.csc }})
+        else
+          current=""
+        fi
 
-      - name: Upload to releases
-        uses: actions/upload-artifact@v4
-        with:
-          name: vbmeta_patched_${{ matrix.codename }}
-          path: |
-            target/${{ matrix.codename }}/vbmeta_patched.img
-            target/${{ matrix.codename }}/vbmeta_patched_${{ env.fw }}.tar
+        if [ "$latest" != "$current" ]; then
+          echo "need_update=1" >> $GITHUB_ENV
+        else
+          echo "need_update=0" >> $GITHUB_ENV
+        fi
 
-      - name: Create releases
-        uses: ncipollo/release-action@v1
-        with:
-          tag: release-${{ github.run_number }}-${{ matrix.codename }}
-          name: ${{ matrix.codename }}-${{ github.run_number }}
-          artifacts: |
-            target/${{ matrix.codename }}/vbmeta_patched.img
-            target/${{ matrix.codename }}/vbmeta_patched_${{ env.fw }}.tar
-          prerelease: false
-          body: |
-            Patched vbmeta for device: `${{ matrix.codename }}`
-            **AVB patched Flag:** `${{ env.pflag }}`
-            **SHA-256:** `${{ env.shasum }}`
-            **Build:** `${{ env.fw }}`
-            **Fingerprint:** `${{ env.fp }}`
+    - name: Install dependencies
+      if: env.need_update == '1'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y lz4 unzip python3 python3-venv git curl
+
+    - name: Install samloader
+      if: env.need_update == '1'
+      run: |
+        python3 -m venv venv
+        source venv/bin/activate
+        pip install git+https://github.com/ananjaser1211/samloader.git
+
+    - name: Download firmware
+      if: env.need_update == '1'
+      run: |
+        source venv/bin/activate
+        mkdir fw
+
+        samloader -m ${{ matrix.model }} -r ${{ matrix.csc }} -i ${{ matrix.imei }} download -O fw
+
+        unzip fw/*.zip -d fw
+        rm fw/*.zip
+
+    - name: Extract vbmeta
+      if: env.need_update == '1'
+      run: |
+        tar xvf fw/BL*.tar.md5 vbmeta.img.lz4
+        lz4 -d vbmeta.img.lz4 vbmeta.img
+
+    - name: Patch vbmeta
+      if: env.need_update == '1'
+      run: |
+        cp vbmeta.img vbmeta_patched.img
+
+        printf '\x03' | dd of=vbmeta_patched.img bs=1 seek=123 count=1 conv=notrunc
+
+    - name: Create release package
+      if: env.need_update == '1'
+      run: |
+        mkdir out
+        cp vbmeta_patched.img out/
+        cp vbmeta.img out/
+
+        tar -cf "${{ matrix.codename }}_vbmeta_${latest}.tar" -C out .
+
+    - name: Save version
+      if: env.need_update == '1'
+      run: |
+        echo $latest > current_${{ matrix.model }}_${{ matrix.csc }}
+
+    - name: Commit version file
+      if: env.need_update == '1'
+      run: |
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+
+        git add current_${{ matrix.model }}_${{ matrix.csc }}
+        git commit -m "Update firmware ${{ matrix.model }} $latest" || true
+        git push
+
+    - name: Create release
+      if: env.need_update == '1'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: "${{ matrix.codename }}-${{ env.latest }}"
+        name: "${{ matrix.model }} ${env.latest}"
+        files: |
+          ${{ matrix.codename }}_vbmeta_${{ env.latest }}.tar
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
